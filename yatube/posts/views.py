@@ -126,15 +126,17 @@ def follow_index(request):
     template = "posts/follow.html"
     user = get_object_or_404(User, username=request.user)
     authors = user.follower.all()
-    posts = Post.objects.filter(author=authors.first().author).all()
-    for author in authors:
-        temp = Post.objects.filter(author=author.author).all()
-        posts = posts | temp
-    page_obj = pagination(request, posts)
-    context = {
-        'page_obj': page_obj,
-    }
-    return render(request, template, context)
+    if authors.count() > 0:
+        posts = Post.objects.filter(author=authors.first().author).all()
+        for author in authors:
+            temp = Post.objects.filter(author=author.author).all()
+            posts = posts | temp
+        page_obj = pagination(request, posts)
+        context = {
+            'page_obj': page_obj,
+        }
+        return render(request, template, context)
+    return render(request, template)
 
 
 @login_required
@@ -142,7 +144,7 @@ def profile_follow(request, username):
     user = get_object_or_404(User, username=request.user)
     author = get_object_or_404(User, username=username)
     follow = Follow.objects.filter(user=user, author=author).count()
-    if follow == 0:
+    if follow == 0 and  username != request.user.username:
         Follow.objects.create(user=user, author=author)
     return redirect(reverse('posts:follow_index'))
 

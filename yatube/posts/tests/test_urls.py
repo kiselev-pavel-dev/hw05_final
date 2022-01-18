@@ -60,6 +60,6 @@ class PostURLTests(TestCase):
     def test_404_page(self):
         """Проверка 404 страницы."""
         pages_404 = '/posts/test404/'
-        response = self.guest_client.get(pages_404)
-        self.assertEqual(response.status_code, HTTPStatus.OK)
+        response = self.authorized_client.get(pages_404)
+        self.assertEqual(response.status_code, HTTPStatus.NOT_FOUND)
         self.assertTemplateUsed(response, 'core/404.html')

@@ -23,6 +23,6 @@ class StaticURLTests(TestCase):
 
     def test_404(self):
         """Проверка несуществующей страницы."""
-        response = self.guest_client.get('/about/test404')
-        self.assertEqual(response.status_code, HTTPStatus.OK)
+        response = self.guest_client.get('/about/test404/')
+        self.assertEqual(response.status_code, HTTPStatus.NOT_FOUND)
         self.assertTemplateUsed(response, 'core/404.html')
