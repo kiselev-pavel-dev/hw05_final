@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Технологии{% endblock %}
+{% block content %}
+{% comment %} Колонки с отступом сверху и снизу {% endcomment %}
+<div class="row">
+  <h1>Вот что я умею</h1>
+  {% comment %}
+    Боковой блок со списком технологий 
+    Займет всю ширину блока на мобильном
+    и 25% при размерах экрана ≥768px
+  {% endcomment %}
+  <aside class="col-12 col-md-3">
+    <ul class="list-group list-group-flush">
+      <li class="list-group-item">
+        Python
+      </li>
+      <li class="list-group-item">
+        Django
+      </li>
+    </ul>
+  </aside>
+  {% comment %}
+    Статья  
+    Займет всю ширину блока на мобильном
+    и 75% при размерах экрана ≥768px
+  {% endcomment %}
+  <article class="col-12 col-md-9">
+    <p>
+      В создании этого проекта были применены язык Python, фрэймворк Django, использован Bootstrap для красивого дизайна. <br>
+      Пока делал этот сайт познакомился с миром Django, оказывается все так просто, когда все сложно :))<br>
+      Миграции, это вообще что-то с чем-то, если Вы понимаете, о чем я:)<br>
+      А еще, проект протестирован с использованием Unittest.
+    </p>
+  </article>
+</div>
+{% endblock %}
