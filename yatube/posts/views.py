@@ -136,6 +136,9 @@ def follow_index(request):
             'page_obj': page_obj,
         }
         return render(request, template, context)
+    context = {
+        'page_obj': ' '
+    }
     return render(request, template)
 
 
