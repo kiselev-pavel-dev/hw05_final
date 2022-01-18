@@ -126,6 +126,7 @@ def follow_index(request):
     template = "posts/follow.html"
     user = get_object_or_404(User, username=request.user)
     authors = user.follower.all()
+    posts = ''
     if authors.count() > 0:
         posts = Post.objects.filter(author=authors.first().author).all()
         for author in authors:
@@ -136,8 +137,9 @@ def follow_index(request):
             'page_obj': page_obj,
         }
         return render(request, template, context)
+    page_obj = pagination(request, posts)
     context = {
-        'page_obj': ' '
+        'page_obj': page_obj
     }
     return render(request, template)
 
