@@ -1,11 +1,17 @@
+import shutil
+import tempfile
+
 from http import HTTPStatus
 from django.contrib.auth import get_user_model
-from django.test import Client, TestCase
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 
 from ..models import Comment, Group, Post
 
 User = get_user_model()
+
+TEMP_MEDIA_ROOT = tempfile.mkdtemp()
 
 
 class CommentFormTest(TestCase):
@@ -34,30 +40,51 @@ class CommentFormTest(TestCase):
 
     def test_authorized_comment_add(self):
         """Проверка что авторизованный пользователь может добавить
-        комментарий и он появился на странице поста."""
+        комментарий."""
         comments_count = Comment.objects.count()
         post_id = self.post_test.pk
         form_data = {
             'text': 'Тестовый комментарий 2'
         }
-        response = self.authorized_client.post(
+        self.authorized_client.post(
             reverse('posts:add_comment', kwargs={'post_id': post_id}),
             data=form_data
         )
         self.assertEqual(Comment.objects.count(), comments_count + 1)
-        new_comment = Comment.objects.latest('pub_date')
-        response = self.authorized_client.get(reverse(
-            'posts:post_detail',
-            kwargs={'post_id': post_id}
-        ))
-        first_object = response.context['comments'][0]
-        self.assertEqual(first_object.text, new_comment.text)
+
+    def test_guest_comment_add(self):
+        """Проверка что гостевой пользователь не может добавить
+        комментарий."""
+        comments_count = Comment.objects.count()
+        post_id = self.post_test.pk
+        form_data = {
+            'text': 'Тестовый комментарий 2'
+        }
+        self.guest_client.post(
+            reverse('posts:add_comment', kwargs={'post_id': post_id}),
+            data=form_data
+        )
+        self.assertEqual(Comment.objects.count(), comments_count)
 
 
+@override_settings(MEDIA_ROOT=TEMP_MEDIA_ROOT)
 class PostFormsTest(TestCase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
+        small_gif = (
+            b'\x47\x49\x46\x38\x39\x61\x02\x00'
+            b'\x01\x00\x80\x00\x00\x00\x00\x00'
+            b'\xFF\xFF\xFF\x21\xF9\x04\x00\x00'
+            b'\x00\x00\x00\x2C\x00\x00\x00\x00'
+            b'\x02\x00\x01\x00\x00\x02\x02\x0C'
+            b'\x0A\x00\x3B'
+        )
+        uploaded = SimpleUploadedFile(
+            name='small.gif',
+            content=small_gif,
+            content_type='image/gif'
+        )
         cls.user = User.objects.create(username='NoName')
         cls.guest_client = Client()
         cls.authorized_client = Client()
@@ -76,7 +103,13 @@ class PostFormsTest(TestCase):
             text='Тестовый пост контент',
             group=cls.group_test,
             author=cls.user,
+            image=uploaded,
         )
+
+    @classmethod
+    def tearDownClass(cls):
+        super().tearDownClass()
+        shutil.rmtree(TEMP_MEDIA_ROOT, ignore_errors=True)
 
     def test_form_post(self):
         """Проверяем что при POST запросе создается запись в БД."""
@@ -84,7 +117,8 @@ class PostFormsTest(TestCase):
         username = self.user.username
         form_fields = {
             'text': 'Тестовый пост контент 2',
-            'group': self.group_test.pk
+            'group': self.group_test.pk,
+            'image': self.post_test.image
         }
         response = self.authorized_client.post(
             reverse('posts:post_create'),

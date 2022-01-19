@@ -2,7 +2,7 @@ import shutil
 import tempfile
 
 from django.contrib.auth import get_user_model
-from http import HTTPStatus
+from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
@@ -10,8 +10,7 @@ from django import forms
 
 from yatube.settings import POSTS_ON_PAGE
 
-from ..models import Follow, Group, Post
-from ..forms import PostForm
+from ..models import Comment, Follow, Group, Post
 
 User = get_user_model()
 
@@ -50,7 +49,6 @@ class TestImagePages(TestCase):
             author=cls.user,
             image=uploaded
         )
-        cls.form = PostForm()
 
     @classmethod
     def tearDownClass(cls):
@@ -75,22 +73,6 @@ class TestImagePages(TestCase):
         page = reverse('posts:post_detail', kwargs={'post_id': post_id})
         response = self.authorized_client.get(page)
         self.assertEqual(response.context.get('post').image, image)
-
-    def test_form_add_images(self):
-        """Проверяем что при отправке поста с картинкой через форму
-        создается запись в базе."""
-        posts_count = Post.objects.count()
-        form_data = {
-            'text': 'Тестовый пост контент 2',
-            'image': self.post_test.image
-        }
-        response = self.authorized_client.post(
-            reverse('posts:post_create'),
-            data=form_data,
-            follow=True
-        )
-        self.assertEqual(response.status_code, HTTPStatus.OK)
-        self.assertEqual(Post.objects.count(), posts_count + 1)
 
 
 class PaginatorViewTest(TestCase):
@@ -265,17 +247,19 @@ class PostViewTest(TestCase):
 
     def test_cache_index(self):
         """Проверяем что главная отдает кэшированные данные."""
-        post_test_2 = Post.objects.create(
+        response_1 = self.authorized_client.get(reverse('posts:index'))
+        count_1 = len(response_1.context['page_obj'])
+        Post.objects.create(
             text='Тестовый пост контент 2',
             group=self.group_test,
             author=self.user,
         )
-        response_1 = self.authorized_client.get(reverse('posts:index'))
-        post_test_2.delete()
         response_2 = self.authorized_client.get(reverse('posts:index'))
-        count_1 = len(response_1.context['page_obj'])
-        count_2 = len(response_2.context['page_obj'])
-        self.assertEqual(count_1, count_2)
+        self.assertEqual(response_1.content, response_2.content)
+        cache.clear()
+        response_3 = self.authorized_client.get(reverse('posts:index'))
+        count_3 = len(response_3.context['page_obj'])
+        self.assertEqual(count_3, count_1 + 1)
 
 
 class FollowTest(TestCase):
@@ -284,8 +268,11 @@ class FollowTest(TestCase):
         super().setUpClass()
         cls.user_1 = User.objects.create(username='User')
         cls.user_2 = User.objects.create(username='User_2')
+        cls.user_3 = User.objects.create(username='User_3')
         cls.authorized_client = Client()
         cls.authorized_client.force_login(cls.user_1)
+        cls.authorized_client_2 = Client()
+        cls.authorized_client_2.force_login(cls.user_2)
         cls.group_test = Group.objects.create(
             title='Тестовая группа',
             slug='test',
@@ -296,35 +283,80 @@ class FollowTest(TestCase):
             group=cls.group_test,
             author=cls.user_2,
         )
+        cls.test_follow = Follow.objects.create(
+            user=cls.user_1,
+            author=cls.user_2
+        )
 
     def test_profile_follow(self):
-        """Проверяем что пользователь может подписаться
-        и отписаться."""
+        """Проверяем что пользователь может подписаться."""
         follow_count = Follow.objects.count()
-        username = self.user_2.username
+        username = self.user_3.username
         self.authorized_client.get(reverse(
             'posts:profile_follow',
             kwargs={'username': username}
         ))
         self.assertEqual(Follow.objects.count(), follow_count + 1)
+
+    def test_profile_unfollow(self):
+        """Проверяем что пользователь может отписаться."""
+        follow_count = Follow.objects.count()
+        username = self.user_2.username
         self.authorized_client.get(reverse(
             'posts:profile_unfollow',
             kwargs={'username': username}
         ))
-        self.assertEqual(Follow.objects.count(), follow_count)
+        self.assertEqual(Follow.objects.count(), follow_count - 1)
 
     def test_add_post_in_follower(self):
         """Проверяем что пост появляется в ленте у тех, кто подписан."""
-        username = self.user_2.username
-        response = self.authorized_client.get(reverse(
-            'posts:profile_follow',
-            kwargs={'username': username}
-        ))
-        post_new = Post.objects.create(
-            text='Тестовый пост контент новый',
-            group=self.group_test,
-            author=self.user_2,
-        )
         response = self.authorized_client.get(reverse('posts:follow_index'))
         first = response.context['page_obj'][0]
-        self.assertEqual(first.text, post_new.text)
+        self.assertEqual(first.text, self.post_test.text)
+
+    def test_no_add_post_in_follower(self):
+        """Проверяем что пост не появляется в ленте у тех, кто
+        не подписан."""
+        posts = Post.objects.filter(author=self.user_2).count()
+        Post.objects.create(
+            text='Тестовый пост контент новый',
+            group=self.group_test,
+            author=self.user_3,
+        )
+        response = self.authorized_client.get(reverse('posts:follow_index'))
+        count_posts = len(response.context['page_obj'])
+        self.assertEqual(count_posts, posts)
+
+
+class ComentTest(TestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.user = User.objects.create(username='NoName')
+        cls.authorized_client = Client()
+        cls.authorized_client.force_login(cls.user)
+        cls.group_test = Group.objects.create(
+            title='Тестовая группа',
+            slug='test',
+            description='Описание тестовой группы'
+        )
+        cls.post_test = Post.objects.create(
+            text='Тестовый пост контент',
+            group=cls.group_test,
+            author=cls.user,
+        )
+        cls.comment_test = Comment.objects.create(
+            text='Тестовый комментарий',
+            post=cls.post_test,
+            author=cls.user
+        )
+
+    def test_comment_add_on_page(self):
+        """Проверка что комментарий добавился к посту."""
+        post_id = self.post_test.pk
+        response = self.authorized_client.get(
+            reverse('posts:post_detail', kwargs={'post_id': post_id}),
+        )
+        first_object = response.context['comments'][0]
+        self.assertEqual(first_object.text, self.comment_test.text)
+        self.assertEqual(first_object.author, self.comment_test.author)

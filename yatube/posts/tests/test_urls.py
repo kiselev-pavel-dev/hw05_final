@@ -2,6 +2,7 @@ from django.contrib.auth import get_user_model
 from http import HTTPStatus
 
 from django.test import Client, TestCase
+from django.urls import reverse
 
 from ..models import Group, Post
 
@@ -45,17 +46,39 @@ class PostURLTests(TestCase):
                 self.assertEqual(response.status_code, HTTPStatus.OK)
 
     def test_private_pages(self):
-        """Проверка доступности страниц создания и редактирования поста."""
+        """Проверка доступности страниц приложения posts
+        для авторизованного пользователя."""
         post_id = self.post_test.pk
         pages_for_authorized = {
             '/create/': 'posts/create_post.html',
-            f'/posts/{post_id}/edit/': 'posts/create_post.html'
+            f'/posts/{post_id}/edit/': 'posts/create_post.html',
+            '/follow/': 'posts/follow.html',
         }
         for adress, template in pages_for_authorized.items():
             with self.subTest(adress=adress):
                 response = self.authorized_client.get(adress)
                 self.assertTemplateUsed(response, template)
                 self.assertEqual(response.status_code, HTTPStatus.OK)
+
+    def test_follow_unfollow_pages(self):
+        """Проверка адресов follow и unfollow."""
+        username = self.user.username
+        pages_test = [
+            f'/profile/{username}/follow/',
+            f'/profile/{username}/unfollow/'
+        ]
+        for page in pages_test:
+            with self.subTest(page=page):
+                response = self.authorized_client.get(page)
+                self.assertEqual(response.status_code, HTTPStatus.FOUND)
+                self.assertRedirects(response, reverse('posts:follow_index'))
+
+    def test_comment_url(self):
+        """Проверка url комментария."""
+        post_id = self.post_test.pk
+        url = f'/posts/{post_id}/comment/'
+        response = self.authorized_client.get(url)
+        self.assertEqual(response.status_code, HTTPStatus.FOUND)
 
     def test_404_page(self):
         """Проверка 404 страницы."""
