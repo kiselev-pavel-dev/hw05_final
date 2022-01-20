@@ -60,11 +60,16 @@ class CommentFormTest(TestCase):
         form_data = {
             'text': 'Тестовый комментарий 2'
         }
-        self.guest_client.post(
+        response = self.guest_client.post(
             reverse('posts:add_comment', kwargs={'post_id': post_id}),
             data=form_data
         )
         self.assertEqual(Comment.objects.count(), comments_count)
+        redirect = "%s?next=%s" % (
+            reverse('users:login'),
+            reverse('posts:add_comment', kwargs={'post_id': post_id})
+        )
+        self.assertRedirects(response, redirect)
 
 
 @override_settings(MEDIA_ROOT=TEMP_MEDIA_ROOT)

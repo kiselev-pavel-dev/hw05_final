@@ -297,6 +297,9 @@ class FollowTest(TestCase):
             kwargs={'username': username}
         ))
         self.assertEqual(Follow.objects.count(), follow_count + 1)
+        new_follow = Follow.objects.last()
+        self.assertEqual(new_follow.user, self.user_1)
+        self.assertEqual(new_follow.author, self.user_3)
 
     def test_profile_unfollow(self):
         """Проверяем что пользователь может отписаться."""
@@ -310,9 +313,18 @@ class FollowTest(TestCase):
 
     def test_add_post_in_follower(self):
         """Проверяем что пост появляется в ленте у тех, кто подписан."""
+        Follow.objects.create(
+            user=self.user_1,
+            author=self.user_3,
+        )
+        new_post = Post.objects.create(
+            text='Тестовый пост контент новый',
+            group=self.group_test,
+            author=self.user_3,
+        )
         response = self.authorized_client.get(reverse('posts:follow_index'))
         first = response.context['page_obj'][0]
-        self.assertEqual(first.text, self.post_test.text)
+        self.assertEqual(first.text, new_post.text)
 
     def test_no_add_post_in_follower(self):
         """Проверяем что пост не появляется в ленте у тех, кто
