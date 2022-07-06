@@ -56,3 +56,5 @@ python3 manage.py migrate
 
 ```
 python3 manage.py runserver
+
+После этого заходим на http://127.0.0.1:8000 и отобразится главная страница проекта
